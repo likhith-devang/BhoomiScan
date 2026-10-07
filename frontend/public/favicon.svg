@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80">
+  <defs>
+    <radialGradient id="water" cx="38%" cy="34%" r="68%">
+      <stop offset="0%" stop-color="#1a1a1a"/>
+      <stop offset="55%" stop-color="#050505"/>
+      <stop offset="100%" stop-color="#000"/>
+    </radialGradient>
+    <linearGradient id="land" x1="20" y1="12" x2="64" y2="68" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#f8e7b0"/>
+      <stop offset="40%" stop-color="#e1c158"/>
+      <stop offset="100%" stop-color="#b8860b"/>
+    </linearGradient>
+    <linearGradient id="rim" x1="12" y1="8" x2="70" y2="72" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#fff1c2"/>
+      <stop offset="50%" stop-color="#d4af37"/>
+      <stop offset="100%" stop-color="#7a5b10"/>
+    </linearGradient>
+    <clipPath id="orb">
+      <circle cx="40" cy="40" r="28.5"/>
+    </clipPath>
+  </defs>
+  <rect width="80" height="80" rx="20" fill="#050505"/>
+  <circle cx="40" cy="40" r="29.5" fill="url(#water)"/>
+  <circle cx="40" cy="40" r="29.5" fill="none" stroke="url(#rim)" stroke-width="2"/>
+  <g clip-path="url(#orb)" fill="url(#land)">
+    <path d="M18 24c4-6 12-7 16-2 3 4 1 9-2 12-4 3-9 2-12-1-3-3-4-6-2-9z"/>
+    <path d="M24 38c4 2 6 8 4 14-2 4-6 3-8 0-3-5-2-12 4-14z"/>
+    <path d="M39 21c4-3 8-2 10 2 1 3-1 5-3 6-4 1-8-2-7-8z"/>
+    <path d="M40 29c6 0 8 6 7 13-1 6-5 9-8 7-4-3-5-10-3-16 1-2 2-4 4-4z"/>
+    <path d="M49 18c8-2 16 4 15 12-1 6-7 8-12 5-5-3-7-10-3-17z"/>
+    <path d="M54 44c5 0 8 4 6 7-2 3-6 3-8 1-3-2-2-7 2-8z"/>
+  </g>
+</svg>

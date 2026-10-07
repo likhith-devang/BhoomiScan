@@ -1,0 +1,20 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: bhoomiscan-db
+    environment:
+      POSTGRES_USER: bhoomiscan
+      POSTGRES_PASSWORD: bhoomiscan
+      POSTGRES_DB: bhoomiscan
+    ports:
+      - "5432:5432"
+    volumes:
+      - bhoomiscan_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bhoomiscan -d bhoomiscan"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  bhoomiscan_pgdata:
