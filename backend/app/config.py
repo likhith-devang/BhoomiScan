@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     SARVAM_API_KEY: str = ""
     SARVAM_POLL_SECONDS: int = 3
     SARVAM_MAX_WAIT_SECONDS: int = 120
+    # On startup, promote this username to SUPER_ADMIN if the account already exists.
+    BOOTSTRAP_SUPER_ADMIN_USERNAME: str = ""
 
     model_config = SettingsConfigDict(
         env_file=str(ROOT_DIR / ".env"),

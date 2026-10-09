@@ -26,6 +26,26 @@ from app.routers.property_cases import router as property_cases_router
 from app.routers.reports import router as reports_router
 
 
+def _bootstrap_super_admin() -> None:
+    settings = get_settings()
+    username = (settings.BOOTSTRAP_SUPER_ADMIN_USERNAME or "").strip()
+    if not username:
+        return
+    from sqlalchemy import select
+    from sqlalchemy.orm import Session
+
+    from app.constants import ROLE_SUPER_ADMIN
+    from app.models.user import User
+
+    with Session(engine) as db:
+        user = db.scalar(select(User).where(User.username == username))
+        if user is None or user.role == ROLE_SUPER_ADMIN:
+            return
+        user.role = ROLE_SUPER_ADMIN
+        db.add(user)
+        db.commit()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = get_settings()
@@ -33,6 +53,7 @@ async def lifespan(app: FastAPI):
     if not getattr(app.state, "skip_db_init", False):
         Base.metadata.create_all(bind=engine)
         ensure_schema(engine)
+        _bootstrap_super_admin()
     yield
 
 
