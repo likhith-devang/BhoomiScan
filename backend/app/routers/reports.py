@@ -1,15 +1,17 @@
 import uuid
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.database import get_db
-from app.deps import get_current_user
+from app.deps import assert_case_access, can_generate_pdf, get_current_user
 from app.models.property_case import PropertyCase
 from app.models.report import DocumentComparison, FinalReport
 from app.models.user import User
 from app.schemas.report import DueDiligenceResponse, FinalReportListItem, FinalReportResponse, IntegrityResponse
+from app.services.audit_service import record_audit
 from app.services.case_analysis_service import recalculate_case
 from app.services.report_pdf import build_report_pdf
 from app.services.report_service import finalize_case, serialize_report, verify_report
@@ -17,7 +19,7 @@ from app.services.report_service import finalize_case, serialize_report, verify_
 router = APIRouter(prefix="/property-cases", tags=["due-diligence"])
 
 
-def _owned_case(db: Session, case_id: uuid.UUID, user: User) -> PropertyCase:
+def _accessible_case(db: Session, case_id: uuid.UUID, user: User) -> PropertyCase:
     case = db.scalar(
         select(PropertyCase)
         .options(selectinload(PropertyCase.documents))
@@ -25,13 +27,12 @@ def _owned_case(db: Session, case_id: uuid.UUID, user: User) -> PropertyCase:
     )
     if case is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "We could not find this property file.")
-    if case.user_id != user.id:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "You cannot open this property file.")
+    assert_case_access(user, case.user_id)
     return case
 
 
-def _owned_report(db: Session, case_id: uuid.UUID, report_id: uuid.UUID, user: User) -> FinalReport:
-    case = _owned_case(db, case_id, user)
+def _accessible_report(db: Session, case_id: uuid.UUID, report_id: uuid.UUID, user: User) -> FinalReport:
+    case = _accessible_case(db, case_id, user)
     report = db.scalar(
         select(FinalReport)
         .options(selectinload(FinalReport.ledger_record))
@@ -48,7 +49,7 @@ def recalculate_property_case(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> dict:
-    case = _owned_case(db, case_id, current_user)
+    case = _accessible_case(db, case_id, current_user)
     try:
         return recalculate_case(db, case)
     except ValueError as exc:
@@ -70,7 +71,7 @@ def get_comparisons(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> list[dict]:
-    case = _owned_case(db, case_id, current_user)
+    case = _accessible_case(db, case_id, current_user)
     rows = db.scalars(
         select(DocumentComparison)
         .where(DocumentComparison.property_case_id == case.id)
@@ -101,9 +102,9 @@ def finalize_due_diligence(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> dict:
-    case = _owned_case(db, case_id, current_user)
+    case = _accessible_case(db, case_id, current_user)
     try:
-        report = finalize_case(db, case)
+        report = finalize_case(db, case, actor=current_user)
     except ValueError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
     return serialize_report(report)
@@ -115,7 +116,7 @@ def list_reports(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> list[FinalReport]:
-    case = _owned_case(db, case_id, current_user)
+    case = _accessible_case(db, case_id, current_user)
     return db.scalars(
         select(FinalReport).where(FinalReport.property_case_id == case.id).order_by(FinalReport.version.desc())
     ).all()
@@ -128,7 +129,7 @@ def get_report(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> dict:
-    return serialize_report(_owned_report(db, case_id, report_id, current_user))
+    return serialize_report(_accessible_report(db, case_id, report_id, current_user))
 
 
 @router.get("/{case_id}/reports/{report_id}/verify", response_model=IntegrityResponse)
@@ -138,7 +139,7 @@ def verify_report_integrity(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> dict:
-    report = _owned_report(db, case_id, report_id, current_user)
+    report = _accessible_report(db, case_id, report_id, current_user)
     return verify_report(db, report)
 
 
@@ -149,7 +150,21 @@ def download_report_pdf(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> Response:
-    report = _owned_report(db, case_id, report_id, current_user)
+    if not can_generate_pdf(current_user):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Only Super Admin, Admin, or Secondary Admin roles may download the PDF report.",
+        )
+    report = _accessible_report(db, case_id, report_id, current_user)
+    record_audit(
+        db,
+        action="PDF_DOWNLOADED",
+        actor=current_user,
+        resource_type="final_report",
+        resource_id=report.id,
+        detail=f"PDF downloaded for report v{report.version}.",
+        commit=True,
+    )
     payload = build_report_pdf(report)
     filename = f"BhoomiScan_DueDiligence_v{report.version}.pdf"
     return Response(

@@ -12,6 +12,7 @@ from app.constants import (
     COMPARISON_NOT_AVAILABLE,
     DISCLAIMER,
     DOCUMENT_STATUS_ANALYZED,
+    DOCUMENT_STATUS_DISCARDED,
     DOCUMENT_TYPE_LABELS,
     RISK_CATEGORIES,
     RISK_CATEGORY_LABELS,
@@ -48,7 +49,8 @@ def analyzed_documents(case: PropertyCase) -> list[Document]:
     return [
         item
         for item in case.documents
-        if item.status == DOCUMENT_STATUS_ANALYZED and item.extracted_data
+        if item.extracted_data
+        and item.status in {DOCUMENT_STATUS_ANALYZED, DOCUMENT_STATUS_DISCARDED}
     ]
 
 

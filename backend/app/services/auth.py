@@ -5,6 +5,7 @@ import bcrypt
 import jwt
 
 from app.config import get_settings
+from app.constants import DEFAULT_SIGNUP_ROLE
 
 
 def hash_password(password: str) -> str:
@@ -18,12 +19,13 @@ def verify_password(password: str, password_hash: str) -> bool:
         return False
 
 
-def create_access_token(user_id: UUID, username: str) -> str:
+def create_access_token(user_id: UUID, username: str, role: str = DEFAULT_SIGNUP_ROLE) -> str:
     settings = get_settings()
     expire = datetime.now(timezone.utc) + timedelta(minutes=settings.JWT_EXPIRE_MINUTES)
     payload = {
         "sub": str(user_id),
         "username": username,
+        "role": role,
         "exp": expire,
         "iat": datetime.now(timezone.utc),
     }

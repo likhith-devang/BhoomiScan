@@ -73,6 +73,7 @@ def test_signup_success(client: TestClient):
     assert response.status_code == 201
     body = response.json()
     assert body["username"] == "advocate"
+    assert body["role"] == "BUYER"
     assert "id" in body
     assert "password" not in body
     assert "password_hash" not in body
@@ -118,7 +119,9 @@ def test_protected_endpoint_with_token(client: TestClient):
     headers = auth_header(client)
     response = client.get("/auth/me", headers=headers)
     assert response.status_code == 200
-    assert response.json()["username"] == "advocate"
+    body = response.json()
+    assert body["username"] == "advocate"
+    assert body["role"] == "BUYER"
 
 
 def test_property_case_creation(client: TestClient):

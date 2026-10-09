@@ -5,11 +5,16 @@ import ErrorMessage from "../components/ErrorMessage";
 import FlowStepper from "../components/FlowStepper";
 import LoadingSpinner from "../components/LoadingSpinner";
 import PageShell from "../components/PageShell";
+import { useAuth } from "../hooks/useAuth";
 import { caseApi, errorMessage } from "../services/api";
+
+const PDF_ROLES = new Set(["SUPER_ADMIN", "ADMIN", "SECONDARY_ADMIN"]);
 
 export default function FinalReportPage() {
   const { id, reportId } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const canDownloadPdf = PDF_ROLES.has(user?.role || "");
   const [report, setReport] = useState(null);
   const [integrity, setIntegrity] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -126,9 +131,15 @@ export default function FinalReportPage() {
                 <Button variant="ghost" onClick={load}>
                   Verify Integrity
                 </Button>
-                <Button variant="gold" onClick={downloadPdf}>
-                  Download PDF
-                </Button>
+                {canDownloadPdf ? (
+                  <Button variant="gold" onClick={downloadPdf}>
+                    Download PDF
+                  </Button>
+                ) : (
+                  <p className="self-center text-xs text-mist">
+                    PDF download is limited to Admin and Secondary Admin roles.
+                  </p>
+                )}
               </div>
             </div>
           </section>

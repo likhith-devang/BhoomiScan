@@ -28,6 +28,12 @@ export const authApi = {
   me: () => api.get("/auth/me"),
 };
 
+export const adminApi = {
+  users: () => api.get("/admin/users"),
+  assignRole: (userId, role) => api.patch(`/admin/users/${userId}/role`, { role }),
+  auditLogs: (limit = 100) => api.get("/admin/audit-logs", { params: { limit } }),
+};
+
 export const caseApi = {
   create: (payload) => api.post("/property-cases", payload),
   list: () => api.get("/property-cases"),

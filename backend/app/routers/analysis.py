@@ -5,18 +5,19 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.database import get_db
-from app.deps import get_current_user
+from app.deps import assert_case_access, get_current_user
 from app.models.analysis import Analysis, RiskFinding
 from app.models.document import Document
 from app.models.property_case import PropertyCase
 from app.models.user import User
 from app.schemas.analysis import AnalysisResponse, EvidenceResponse, RecommendationResponse
 from app.services.analysis_service import analyze_document, serialize_analysis
+from app.services.audit_service import record_audit
 
 router = APIRouter(prefix="/property-cases", tags=["analysis"])
 
 
-def _owned_case(db: Session, case_id: uuid.UUID, user: User) -> PropertyCase:
+def _accessible_case(db: Session, case_id: uuid.UUID, user: User) -> PropertyCase:
     case = db.scalar(
         select(PropertyCase)
         .options(selectinload(PropertyCase.documents))
@@ -24,13 +25,14 @@ def _owned_case(db: Session, case_id: uuid.UUID, user: User) -> PropertyCase:
     )
     if case is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "We could not find this property file.")
-    if case.user_id != user.id:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "You cannot open this property file.")
+    assert_case_access(user, case.user_id)
     return case
 
 
-def _owned_document(db: Session, case_id: uuid.UUID, document_id: uuid.UUID, user: User) -> tuple[PropertyCase, Document]:
-    case = _owned_case(db, case_id, user)
+def _accessible_document(
+    db: Session, case_id: uuid.UUID, document_id: uuid.UUID, user: User
+) -> tuple[PropertyCase, Document]:
+    case = _accessible_case(db, case_id, user)
     document = next((item for item in case.documents if item.id == document_id), None)
     if document is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "We could not find this document.")
@@ -73,8 +75,18 @@ def analyze_uploaded_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> dict:
-    case, document = _owned_document(db, case_id, document_id, current_user)
+    case, document = _accessible_document(db, case_id, document_id, current_user)
     analysis = analyze_document(db, document, case.documents)
+    record_audit(
+        db,
+        action="DOCUMENT_ANALYZED",
+        actor=current_user,
+        resource_type="document",
+        resource_id=document.id,
+        detail=f"Analysis status: {analysis.analysis_status}.",
+        meta={"case_id": str(case.id)},
+        commit=True,
+    )
     loaded = _load_analysis(db, analysis.id)
     return serialize_analysis(loaded, loaded.document)
 
@@ -89,7 +101,7 @@ def get_document_analysis(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> dict:
-    _owned_document(db, case_id, document_id, current_user)
+    _accessible_document(db, case_id, document_id, current_user)
     analysis = _latest_for_document(db, document_id)
     if analysis is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "No analysis is available for this document yet.")
@@ -102,7 +114,7 @@ def get_case_analysis(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> dict:
-    case = _owned_case(db, case_id, current_user)
+    case = _accessible_case(db, case_id, current_user)
     analysis = db.scalar(
         select(Analysis)
         .options(
@@ -136,7 +148,7 @@ def get_finding_evidence(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> list[dict]:
-    case = _owned_case(db, case_id, current_user)
+    case = _accessible_case(db, case_id, current_user)
     finding = db.scalar(
         select(RiskFinding)
         .options(selectinload(RiskFinding.evidence), selectinload(RiskFinding.analysis))

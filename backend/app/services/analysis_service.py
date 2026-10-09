@@ -20,11 +20,16 @@ from app.models.document import Document
 from app.services.document_classifier import classify_document, looks_like_kannada
 from app.services.evidence_service import ensure_finding_evidence
 from app.services.extraction_service import EXTRACTION_SCHEMA, merge_extraction
+from app.services.property_gate import is_property_document, validate_english_working_text
 from app.services.recommendation_engine import build_recommendations
 from app.services.risk_engine import evaluate_risks
 from app.services.sarvam_service import SarvamError, digitise_document, extract_fields, translate_text
 
 logger = logging.getLogger(__name__)
+
+
+class PropertyGateError(Exception):
+    """Raised when AI is blocked because the file is not a property document."""
 
 
 def _steps(*done: str) -> list[dict]:
@@ -61,6 +66,27 @@ def analyze_document(db: Session, document: Document, case_documents: list[Docum
             working_text = translated or original_text
 
         classification = classify_document(working_text, document.original_filename)
+        allowed, gate_reason = is_property_document(
+            classification["document_type"],
+            working_text,
+            document.original_filename,
+        )
+        if not allowed:
+            raise PropertyGateError(gate_reason)
+
+        classified_property = classification["document_type"] != "OTHER"
+        language_check = validate_english_working_text(
+            working_text,
+            detected,
+            classified_property_type=classified_property,
+        )
+        if not language_check["ok"]:
+            raise PropertyGateError(
+                language_check["notes"][0]
+                if language_check["notes"]
+                else "Document text could not be validated for analysis."
+            )
+
         try:
             ai_extract = extract_fields(
                 document.file_path,
@@ -131,17 +157,18 @@ def analyze_document(db: Session, document: Document, case_documents: list[Docum
         db.commit()
         db.refresh(analysis)
         return analysis
-    except SarvamError as exc:
+    except (SarvamError, PropertyGateError) as exc:
         document.status = DOCUMENT_STATUS_FAILED
         document.processing_error = str(exc)
         analysis = Analysis(
             property_case_id=document.property_case_id,
             document_id=document.id,
             analysis_status=ANALYSIS_FAILED,
-            pipeline_steps=_steps("uploaded"),
+            pipeline_steps=_steps("uploaded", "reading"),
             extracted_data=None,
         )
         db.add(analysis)
+        db.add(document)
         db.commit()
         db.refresh(analysis)
         return analysis

@@ -9,7 +9,17 @@ from pydantic import ValidationError
 from app.config import get_settings
 from app.database import Base, engine
 from app.db_migrate import ensure_schema
-from app.models import Analysis, Document, DocumentComparison, FinalReport, LedgerRecord, PropertyCase, User  # noqa: F401
+from app.models import (  # noqa: F401
+    Analysis,
+    AuditLog,
+    Document,
+    DocumentComparison,
+    FinalReport,
+    LedgerRecord,
+    PropertyCase,
+    User,
+)
+from app.routers.admin import router as admin_router
 from app.routers.analysis import router as analysis_router
 from app.routers.auth import router as auth_router
 from app.routers.property_cases import router as property_cases_router
@@ -69,6 +79,7 @@ async def pydantic_exception_handler(_: Request, exc: ValidationError) -> JSONRe
 
 
 app.include_router(auth_router)
+app.include_router(admin_router)
 app.include_router(property_cases_router)
 app.include_router(analysis_router)
 app.include_router(reports_router)

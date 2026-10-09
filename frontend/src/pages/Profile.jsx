@@ -22,6 +22,7 @@ export default function Profile() {
         <div className="flex-1">
           <h2 className="font-display text-3xl text-ivory">{username}</h2>
           <p className="mt-1 text-sm text-mist">Plan: {planName}</p>
+          <p className="mt-1 text-sm text-mist">Role: {(user?.role || "BUYER").replaceAll("_", " ")}</p>
         </div>
         <Link to="/profile/settings">
           <Button variant="ghost">Profile Settings</Button>

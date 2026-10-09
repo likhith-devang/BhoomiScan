@@ -100,7 +100,7 @@ def serialize_report(report: FinalReport) -> dict:
     }
 
 
-def finalize_case(db: Session, case: PropertyCase) -> FinalReport:
+def finalize_case(db: Session, case: PropertyCase, actor=None) -> FinalReport:
     analysis = recalculate_case(db, case)
     content = _jsonable(build_report_content(case, analysis))
     version = (db.scalar(select(func.max(FinalReport.version)).where(FinalReport.property_case_id == case.id)) or 0) + 1
@@ -116,6 +116,20 @@ def finalize_case(db: Session, case: PropertyCase) -> FinalReport:
     db.add(report)
     db.flush()
     append_ledger(db, report)
+    # After the report is sealed, discard uploaded bytes so personal papers are not kept on disk.
+    from app.services.audit_service import record_audit
+    from app.services.document_lifecycle import discard_case_documents
+
+    record_audit(
+        db,
+        action="REPORT_FINALIZED",
+        actor=actor,
+        resource_type="final_report",
+        resource_id=report.id,
+        detail=f"Final report v{version} created for case {case.id}.",
+        meta={"risk_score": report.risk_score, "risk_level": report.risk_level},
+    )
+    discard_case_documents(db, case, actor=actor)
     db.commit()
     db.refresh(report)
     return db.scalar(

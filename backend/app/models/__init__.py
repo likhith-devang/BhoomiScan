@@ -1,4 +1,5 @@
 from app.models.analysis import Analysis, EvidenceItem, Recommendation, RiskFinding
+from app.models.audit import AuditLog
 from app.models.document import Document
 from app.models.property_case import PropertyCase
 from app.models.report import DocumentComparison, FinalReport, LedgerRecord
@@ -15,4 +16,5 @@ __all__ = [
     "DocumentComparison",
     "FinalReport",
     "LedgerRecord",
+    "AuditLog",
 ]
